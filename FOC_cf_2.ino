@@ -6,8 +6,8 @@
 
 // code for the leg-decouple hopping robot (finished)
 
-#define GAIN_TUNING
-#define CURRENT_SENSE
+//#define GAIN_TUNING
+//#define CURRENT_SENSE
 
 #define SKIP_IDENTIFICATION
 #define ROTATION_DIR CW
@@ -54,7 +54,7 @@ union {
 union {
   float f_value;
   unsigned char bytes[4];
-} motor_current_q;
+} motor_q;
 
 uint8_t loop_tick = 0;
 
@@ -167,7 +167,7 @@ void setup() {
 void loop() {
   loop_tick++;
   motor.loopFOC();
-  motor.move(motor_target);
+  motor.move(- motor_target);
 
 #ifdef GAIN_TUNING
   motor.monitor();    //使用simpleFOC Studio上位机设置的时候，这句一定要打开。但是会影响程序执行速度
@@ -210,11 +210,11 @@ void loop() {
     }
 
     // serial send
-    motor_angle.f_value = motor.shaft_angle;
-    motor_current_q.f_value = motor.voltage.q;
+    motor_angle.f_value = - motor.shaft_angle;
+    motor_q.f_value = motor.voltage.q;
     Serial.write('A');
     Serial.write(motor_angle.bytes, 4);
-    Serial.write(motor_current_q.bytes, 4);
+    Serial.write(motor_q.bytes, 4);
 
     if (!disable_motor_flag && motor.voltage_limit <= VOLTAGE_LIMIT) {
       motor.voltage_limit += VOLTAGE_LIMIT_RAMPUP;
