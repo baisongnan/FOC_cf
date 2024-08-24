@@ -3,19 +3,24 @@
 #include "SPI.h"
 #include "SimpleFOCDrivers.h"
 #include "encoders/MT6701/MagneticSensorMT6701SSI.h"
-
+// esp32 2.0.17
 // code for the leg-decouple hopping robot (finished)
 
 //#define GAIN_TUNING
 //#define CURRENT_SENSE
 
-#define SKIP_IDENTIFICATION
-#define ROTATION_DIR CW
-#define ZERO_ELECTRIC_ANGLE 2.65
+//#define DIR_FACTOR -1
 
-#define SENSOR_OFFSET 0.303
-#define VOLTAGE_LIMIT 3.0
-#define VOLTAGE_LIMIT_RAMPUP 0.0005f
+#define SKIP_IDENTIFICATION
+#define ROTATION_DIR CCW
+#define ZERO_ELECTRIC_ANGLE 5.6642
+
+#define SENSOR_OFFSET -4.9466
+
+#define VOLTAGE_LIMIT 7.0
+#define VOLTAGE_LIMIT_RAMPUP 0.0006f
+
+# define VELOCITY_STREAMING
 
 
 bool disable_motor_flag = false;
@@ -35,22 +40,16 @@ union {
   unsigned char bytes[4];
 } motor_target_temp;
 
-
 union {
   float f_value;
   unsigned char bytes[4];
 } motor_angle;
-
-//union {
-//  float f_value;
-//  unsigned char bytes[4];
-//} motor_velocity;
-//
-//union {
-//  float f_value;
-//  unsigned char bytes[4];
-//} motor_voltage_q;
-
+#ifdef VELOCITY_STREAMING
+union {
+  float f_value;
+  unsigned char bytes[4];
+} motor_velocity;
+#endif
 union {
   float f_value;
   unsigned char bytes[4];
@@ -102,7 +101,7 @@ void setup() {
 
 
   // velocity loop PID
-  motor.PID_velocity.P = 2.5;
+  motor.PID_velocity.P = 4.5;
   motor.PID_velocity.I = 0.0;
   motor.PID_velocity.D = 0.0;
   motor.PID_velocity.output_ramp = 0.0;
@@ -110,9 +109,9 @@ void setup() {
   // Low pass filtering time constant
   motor.LPF_velocity.Tf = 0.02;
   // angle loop PID
-  motor.P_angle.P = 18.0;
+  motor.P_angle.P = 16.0;
   motor.P_angle.I = 0.0;
-  motor.P_angle.D = 0.0;
+  motor.P_angle.D = 0.3;
   motor.P_angle.output_ramp = 0.0;
   motor.P_angle.limit = 10.0;
   // Low pass filtering time constant
@@ -149,25 +148,30 @@ void setup() {
 #endif
   _delay(1000);
   motor_target = 0.0f;
+#ifdef VELOCITY_STREAMING
+  Serial.println("MV"); // motor ready, with velocity streaming
+#else
   Serial.println("MR"); // motor ready
+#endif
 
 
 
-  motor.loopFOC();
-  motor.move(motor_target);
-  motor.loopFOC();
-  motor.move(motor_target);
-  
-  if (sensor.getAngle() >= 3.14)
-    motor.sensor_offset = SENSOR_OFFSET + _2PI;
-  else
-    motor.sensor_offset = SENSOR_OFFSET;
+//  motor.loopFOC();
+//  motor.move(motor_target);
+//  motor.loopFOC();
+//  motor.move(motor_target);
+
+//  if (sensor.getAngle() >= 3.14)
+//    motor.sensor_offset = SENSOR_OFFSET - _2PI;
+//  else
+//    motor.sensor_offset = SENSOR_OFFSET;
+  motor.sensor_offset = SENSOR_OFFSET;
 }
 
 void loop() {
   loop_tick++;
   motor.loopFOC();
-  motor.move(- motor_target);
+  motor.move(motor_target);
 
 #ifdef GAIN_TUNING
   motor.monitor();    //使用simpleFOC Studio上位机设置的时候，这句一定要打开。但是会影响程序执行速度
@@ -210,11 +214,18 @@ void loop() {
     }
 
     // serial send
-    motor_angle.f_value = - motor.shaft_angle;
-    motor_q.f_value = motor.voltage.q;
+    motor_angle.f_value = motor.shaft_angle;
+    motor_q.f_value = - motor.voltage.q;
+//    motor_q.f_value = current_sense.getQCurrent();
+#ifdef VELOCITY_STREAMING
+    motor_velocity.f_value = motor.shaft_velocity;
+#endif
     Serial.write('A');
     Serial.write(motor_angle.bytes, 4);
     Serial.write(motor_q.bytes, 4);
+#ifdef VELOCITY_STREAMING
+    Serial.write(motor_velocity.bytes, 4);
+#endif
 
     if (!disable_motor_flag && motor.voltage_limit <= VOLTAGE_LIMIT) {
       motor.voltage_limit += VOLTAGE_LIMIT_RAMPUP;
