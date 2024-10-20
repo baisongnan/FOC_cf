@@ -9,7 +9,7 @@
 //#define GAIN_TUNING
 //#define CURRENT_SENSE
 
-//#define DIR_FACTOR -1
+//#define DIR_FACTOR -1 // to be removed
 
 #define SKIP_IDENTIFICATION
 #define ROTATION_DIR CCW
